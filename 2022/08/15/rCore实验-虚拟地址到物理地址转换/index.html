@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="renderer" content="webkit">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="google-site-verification" content="TZE0rZyIqLl10trYu3BWBWa1Vmz6HFwhb2OcNEK4u-s" />
+     <link rel="shortcut icon" href= /img/favicon.png >
+    <title>
+        XBlame&#39;s Blog
+    </title>
+    <meta name="description" content= 天才Blame的技术和生活随笔, 希望能在池水里留下涟漪 >
+    <meta name="keywords" content= Blog,C,Python,Ruby,计算机,嵌入式,技术,体系结构,生活,随笔 >
+    
+<link rel="stylesheet" href="/libs/highlight/styles/monokai-sublime.css">
+
+    
+<link rel="stylesheet" href="/libs/font-awesome/css/font-awesome.min.css">
+
+    
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 6.1.0"></head>
+<body id="bodyx">
+    <div class="hd">
+    <ol class="breadcrumb">
+        <li><img src="/img/favicon.png" class="logopng" alt="logo"></li>
+        <li>
+            <a href="/index.html"><i class="fa fa-home replay-btn" aria-hidden="true"></i></a>
+        </li>
+        <li>XBlame</li>
+        <!--
+        <li class="words" style="font-weight: bold;font-family: Georgia;"> 
+                你为什么就不是肯认同大家的努力？就因为他们比你慢吗？你的价值标准就只有速度而已吗？那还跑什么，去坐新干线，去坐飞机，那样还比较快。你怎么还不明白，阿走，不能一味追求速度，那样只会让人空虚。——清濑灰二 
+        </li>
+        -->
+        
+            <li><a class="ba" href="/about">关于我🏃</a></li>
+        
+            <li><a class="ba" href="/categories">分类🚚</a></li>
+        
+            <li><a class="ba" target="_blank" rel="noopener" href="https://xblame.gitee.io">旧博客🎉</a></li>
+        
+            <li><a class="ba" target="_blank" rel="noopener" href="https://github.com/blameying">GitHub🐒</a></li>
+        
+
+            
+<script src="/libs/jquery.min.js"></script>
+
+            
+<script src="/js/search.js"></script>
+
+            
+                <li>
+                    <form class="site-search-form">
+                        <i class="fa fa-search" id="search-logo"><input type="text" id="local-search-input" class="st-search-input" /></i>
+                    </form>
+                </li>
+                <div class="words" style="font-weight: bold;font-family: Georgia;"> 
+                        你为什么就不是肯认同大家的努力？就因为他们比你慢吗？你的价值标准就只有速度而已吗？那还跑什么，去坐新干线，去坐飞机，那样还比较快。你怎么还不明白，阿走，不能一味追求速度，那样只会让人空虚。——清濑灰二 
+                </div>
+                <div id="local-search-result" class="local-search-result-cls"></div>
+            
+            <script type="text/javascript" id="local.search.active">
+                var inputArea       = document.querySelector("#local-search-input");
+                var getSearchFile = function(){
+                    var path = "/search.xml";
+                    searchFunc(path, 'local-search-input', 'local-search-result');
+                }
+                inputArea.onfocus = function(){ getSearchFile() }
+
+                var $resetButton = $("#search-form .fa-times");
+                var $resultArea = $("#local-search-result");
+
+                inputArea.oninput = function(){ $resetButton.show(); }
+                resetSearch = function(){
+                    $resultArea.html("");
+                    document.querySelector("#search-form").reset();
+                    $resetButton.hide();
+                    $(".no-result").hide();
+                }
+                inputArea.onkeydown = function(){ if(event.keyCode == 13) return false }
+                //No search result
+                $resultArea.bind("DOMNodeRemoved DOMNodeInserted", function(e) {
+                    if (!$(e.target).text()) {
+                        $(".no-result").show(100);
+                    } else {
+                        $(".no-result").hide();
+                    }
+                })
+            </script>
+
+    </ol>
+    <hr>
+</div>
+    <div class="hd posts">
+    <div class="post-title">
+        <p>
+            rCore实验-虚拟地址到物理地址转换
+        </p>
+        <hr>
+    </div>
+    <div class="post-content">
+        <p>最近在看<a target="_blank" rel="noopener" href="https://github.com/LearningOS">rCore操作系统</a>实验，在做到虚拟地址到物理地址转换这一部分花的时间比较多。之前主要是从CPU的角度去理解MMU如何进行虚拟地址到物理地址的转换，多级页表是如何寻找的，知道应该有这么一个页表专门存储下一级页表的地址数组，但是一开始的时候由于没有通读源码，所以一直没找到这部分。所以细读了一下rCore实验在lab4_ref给出的mm部分的代码，主要是带着两个问题读的：</p>
+<ol>
+<li>在satp(Supervisor Address Translation and Protection，监管者地址转换和保护)寄存器发生地址模式切换以后，内核代码中对原来实地址模式下的数据的访问如何继续生效</li>
+<li>OS视角构建页表索引的细节</li>
+</ol>
+<p>在<a target="_blank" rel="noopener" href="https://github.com/LearningOS/rust-based-os-comp2022/tree/main/os4-ref">项目目录</a>下有以下几个部分:</p>
+<table>
+<thead>
+<tr>
+<th align="center">模块</th>
+<th align="center">功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">mm</td>
+<td align="center">内存管理模块</td>
+</tr>
+<tr>
+<td align="center">sync</td>
+<td align="center">多线程同步模块</td>
+</tr>
+<tr>
+<td align="center">syscall</td>
+<td align="center">系统调用模块</td>
+</tr>
+<tr>
+<td align="center">task</td>
+<td align="center">进程管理模块</td>
+</tr>
+<tr>
+<td align="center">trap</td>
+<td align="center">中断模块</td>
+</tr>
+</tbody></table>
+<p>虚拟地址到物理地址的映射和管理主要在内存管理模块中，内存管理模块主要完成了以下几个功能:</p>
+<ul>
+<li>内核堆内存管理</li>
+<li>页表内存分配和回收</li>
+<li>页表目录管理(虚地址到实地址的映射关系维护)</li>
+</ul>
+<h3 id="内核堆内存管理"><a href="#内核堆内存管理" class="headerlink" title="内核堆内存管理"></a>内核堆内存管理</h3><p>按照之前嵌入式实时系统上的经验，操作系统本身直接与硬件打交道，因此会完成“开天辟地”的过程，也就是说需要构建程序运行的环境。类似于应用程序中内存分配功能是要自己来实现的。因此，常用的做法是，通过静态全局变量数组来占据一段连续的内存空间当作堆内存的内存池。内核堆内存管理则主要是负责对这块内存池的使用进行管理。</p>
+<p>在<a target="_blank" rel="noopener" href="https://github.com/LearningOS/rust-based-os-comp2022/blob/main/os4-ref/src/mm/heap_allocator.rs">heap_allocator.rs</a>文件中主要完成了内核的堆内存分配。在正常的应用程序编写时，我们可以使用std库来完成我们在堆上的内存分配，这个操作一般是<strong>new</strong>，而在裸机环境中是没有std环境的，这种情况下可以使用<a target="_blank" rel="noopener" href="https://doc.rust-lang.org/alloc/index.html">alloc</a>库，它的主要介绍如下：</p>
+<blockquote>
+<p>This library provides smart pointers and collections for managing heap-allocated values.</p>
+<p>This library, like libcore, normally doesn’t need to be used directly since its contents are re-exported in the std crate. Crates that use the #![no_std] attribute however will typically not depend on std, so they’d use this crate instead.</p>
+</blockquote>
+<p>当使用alloc库进行分配时，可以通过 <strong>#[global_allocator]</strong> 声明将要使用的分配器，可以看到在 <strong>heap_allocator.rs</strong> 中指定了堆内存分配器：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[global_allocator]</span></span><br><span class="line"><span class="comment">// heap allocator instance</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> HEAP_ALLOCATOR: LockedHeap = LockedHeap::<span class="title function_ invoke__">empty</span>();</span><br></pre></td></tr></table></figure>
+<p>HEAP_ALLOCATOR需要实现 <strong>GlobalAlloc</strong> trait方可被alloc库正确调用，<strong>buddy-system_allocator</strong> 中的 <strong>LockedHeap</strong> 有如下实现：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsafe</span> <span class="keyword">impl</span> <span class="title class_">GlobalAlloc</span> <span class="keyword">for</span> <span class="title class_">LockedHeap</span> &#123;</span><br><span class="line">    <span class="keyword">unsafe</span> <span class="keyword">fn</span> <span class="title function_">alloc</span>(&amp;<span class="keyword">self</span>, layout: Layout) <span class="punctuation">-&gt;</span> *<span class="keyword">mut</span> <span class="type">u8</span> &#123;</span><br><span class="line">        <span class="keyword">self</span>.<span class="number">0</span></span><br><span class="line">            .<span class="title function_ invoke__">lock</span>()</span><br><span class="line">            .<span class="title function_ invoke__">alloc</span>(layout)</span><br><span class="line">            .<span class="title function_ invoke__">ok</span>()</span><br><span class="line">            .<span class="title function_ invoke__">map_or</span>(<span class="number">0</span> <span class="keyword">as</span> *<span class="keyword">mut</span> <span class="type">u8</span>, |allocation| allocation.<span class="title function_ invoke__">as_ptr</span>())</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">unsafe</span> <span class="keyword">fn</span> <span class="title function_">dealloc</span>(&amp;<span class="keyword">self</span>, ptr: *<span class="keyword">mut</span> <span class="type">u8</span>, layout: Layout) &#123;</span><br><span class="line">        <span class="keyword">self</span>.<span class="number">0</span>.<span class="title function_ invoke__">lock</span>().<span class="title function_ invoke__">dealloc</span>(NonNull::<span class="title function_ invoke__">new_unchecked</span>(ptr), layout)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因此内核堆内存管理主要是利用  <strong>alloc</strong> 与 <strong>buddy_system_allocator</strong> 来实现的。</p>
+<h3 id="页表内存分配和回收"><a href="#页表内存分配和回收" class="headerlink" title="页表内存分配和回收"></a>页表内存分配和回收</h3><p>内核会管理全部的内存地址，因此除去内核所占的内存空间外，从链接脚本的 <strong>ekernel（end of kernel）</strong> 开始直到 <strong>MAX_MEMORY</strong> 都将被内核以页表的形式动态管理。这部分的代码在 <a target="_blank" rel="noopener" href="https://github.com/LearningOS/rust-based-os-comp2022/blob/main/os4-ref/src/mm/frame_allocator.rs">frame_allocator.rs</a>，通过 <strong>StackFrameAllocator</strong> 来进行 <strong>stack(栈)</strong> 风格的内存管理：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// StackFrameAllocator</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">StackFrameAllocator</span> &#123;</span><br><span class="line">    current: <span class="type">usize</span>,</span><br><span class="line">    end: <span class="type">usize</span>,</span><br><span class="line">    recycled: <span class="type">Vec</span>&lt;<span class="type">usize</span>&gt;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在初始分配内存时，会通过current的递增来实现。在有内存需要回收的时候，将其地址存入recycled列表中表示其可用，这种情况下再次收到分配内存的请求就会优先从recycled中进行分配。</p>
+<p><strong>FrameTracker</strong> 则是内核对分配的物理页表的一个handler，可以通过它记录物理页表的物理地址，当该handler生命周期结束后，则会自动对指定的页表进行释放。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span> <span class="title class_">Drop</span> <span class="keyword">for</span> <span class="title class_">FrameTracker</span> &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">drop</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) &#123;</span><br><span class="line">        <span class="title function_ invoke__">frame_dealloc</span>(<span class="keyword">self</span>.ppn);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="页表目录管理"><a href="#页表目录管理" class="headerlink" title="页表目录管理"></a>页表目录管理</h3><p>在拥有上一节对全部物理内存的简单分配和回收功能后，开启虚拟地址模式的最后一部分工作就是建立虚拟地址到物理地址的映射关系了。<br><img src="https://blog-img-1310827095.cos.ap-beijing.myqcloud.com/virtualAddr_to_phy.svg" alt="virtualAddr_to_phy"></p>
+<p>如图所示，连续的虚拟地址不一定对应连续的物理地址，而这个对应关系需要操作系统按照CPU支持的格式进行维护。由虚拟地址到物理地址的转换是CPU MMU器件自动发生的硬件行为。</p>
+<p>rCore采用的是<a target="_blank" rel="noopener" href="http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter4/3sv39-implementation-1.html">Sv39</a>的转换模式。与地址转换相关的寄存器为 <strong>satp</strong> 寄存器，它的布局是：<br><img src="http://rcore-os.cn/rCore-Tutorial-Book-v3/_images/satp.png" alt="satp">, 其中PPN存放的是页表的根地址，即多级页表中的第一级页表的地址。当通过页表来进行地址转换时，流程如下：</p>
+<ol>
+<li>通过satp中的ppn访问第一级页表的物理地址</li>
+<li>获取该地址下，虚拟地址的第一级的偏移，找到对应的 <strong>PTE</strong> 节点信息，继而判断这个页表项指向的是下一级页表还是物理的内存页，如果是内存页则直接开始读写操作，如果仍旧不是叶结点则继续查找下一级。（关于PTE，虚拟地址和物理地址的结构信息，可以查看risc-v的<a target="_blank" rel="noopener" href="https://github.com/riscv/riscv-isa-manual/releases/download/Priv-v1.12/riscv-privileged-20211203.pdf">特权级别架构手册</a></li>
+</ol>
+<p>在没有细读源码的时候，我是没找到这样一张表的，因为从来没有在操作系统的角度看过页表的使用，因此不清楚它是随着使用而不断的改变的。</p>
+<p>这部分的源码在 <strong><a target="_blank" rel="noopener" href="https://github.com/LearningOS/rust-based-os-comp2022/blob/main/os4-ref/src/mm/page_table.rs">page_table.rs</a></strong> 中，</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span> <span class="title class_">PageTable</span> &#123;</span><br><span class="line">    <span class="comment">// .......</span></span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">find_pte_create</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, vpn: VirtPageNum) <span class="punctuation">-&gt;</span> <span class="type">Option</span>&lt;&amp;<span class="keyword">mut</span> PageTableEntry&gt; &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">idxs</span> = vpn.<span class="title function_ invoke__">indexes</span>();</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">ppn</span> = <span class="keyword">self</span>.root_ppn;</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">result</span>: <span class="type">Option</span>&lt;&amp;<span class="keyword">mut</span> PageTableEntry&gt; = <span class="literal">None</span>;</span><br><span class="line">        <span class="title function_ invoke__">for</span> (i, idx) <span class="keyword">in</span> idxs.<span class="title function_ invoke__">iter_mut</span>().<span class="title function_ invoke__">enumerate</span>() &#123;</span><br><span class="line">            <span class="keyword">let</span> <span class="variable">pte</span> = &amp;<span class="keyword">mut</span> ppn.<span class="title function_ invoke__">get_pte_array</span>()[*idx];</span><br><span class="line">            <span class="keyword">if</span> i == <span class="number">2</span> &#123;</span><br><span class="line">                result = <span class="title function_ invoke__">Some</span>(pte);</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> !pte.<span class="title function_ invoke__">is_valid</span>() &#123;</span><br><span class="line">                <span class="keyword">let</span> <span class="variable">frame</span> = <span class="title function_ invoke__">frame_alloc</span>().<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">                *pte = PageTableEntry::<span class="title function_ invoke__">new</span>(frame.ppn, PTEFlags::V);</span><br><span class="line">                <span class="keyword">self</span>.frames.<span class="title function_ invoke__">push</span>(frame);</span><br><span class="line">            &#125;</span><br><span class="line">            ppn = pte.<span class="title function_ invoke__">ppn</span>();</span><br><span class="line">        &#125;</span><br><span class="line">        result</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">find_pte</span>(&amp;<span class="keyword">self</span>, vpn: VirtPageNum) <span class="punctuation">-&gt;</span> <span class="type">Option</span>&lt;&amp;PageTableEntry&gt; &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">idxs</span> = vpn.<span class="title function_ invoke__">indexes</span>();</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">ppn</span> = <span class="keyword">self</span>.root_ppn;</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">result</span>: <span class="type">Option</span>&lt;&amp;PageTableEntry&gt; = <span class="literal">None</span>;</span><br><span class="line">        <span class="title function_ invoke__">for</span> (i, idx) <span class="keyword">in</span> idxs.<span class="title function_ invoke__">iter</span>().<span class="title function_ invoke__">enumerate</span>() &#123;</span><br><span class="line">            <span class="keyword">let</span> <span class="variable">pte</span> = &amp;ppn.<span class="title function_ invoke__">get_pte_array</span>()[*idx];</span><br><span class="line">            <span class="keyword">if</span> i == <span class="number">2</span> &#123;</span><br><span class="line">                result = <span class="title function_ invoke__">Some</span>(pte);</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> !pte.<span class="title function_ invoke__">is_valid</span>() &#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="literal">None</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            ppn = pte.<span class="title function_ invoke__">ppn</span>();</span><br><span class="line">        &#125;</span><br><span class="line">        result</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到，在 <strong>find_pte_create</strong> 方法中，<strong>pte</strong> 非法时会通过上段提到的页表内存分配接口进行动态的分配，并将其物理地址 <strong>frame.ppn</strong> 写入 <strong>pte</strong> 中,而当合法时，则直接返回。</p>
+<p>通过上述的几段分析，基本上涵盖了内核所遇到的内存方面的管理。那还有最后一个疑问是，当处理器的地址模式由实地址变为虚地址时，原来内核部分的代码如何正常运行，要知道内核中并不是所有变量用的都是相对地址，包括一些物理外设的访问地址都是固定的。</p>
+<p>我去对比了一下带 <strong>mm</strong> 模块前的 <strong>os</strong> 实验，发现编译器方面并没有添加什么与之相关的编译参数，只能是在代码里做的手脚，发现这部分的处理在 <strong><a target="_blank" rel="noopener" href="https://github.com/LearningOS/rust-based-os-comp2022/blob/main/os4-ref/src/mm/memory_set.rs">memory_set.rs</a></strong> 文件中， </p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">enum</span> <span class="title class_">MapType</span> &#123;</span><br><span class="line">    Identical,</span><br><span class="line">    Framed,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">MapArea</span> &#123;</span><br><span class="line">    vpn_range: VPNRange,</span><br><span class="line">    data_frames: BTreeMap&lt;VirtPageNum, FrameTracker&gt;,</span><br><span class="line">    map_type: MapType,</span><br><span class="line">    map_perm: MapPermission,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里定义了两种的虚拟地址到物理地址映射方式，其中 <strong>Framed</strong> 的方式就是前文提到的分配内存的方式，那这种虚拟地址和物理地址的映射是没有字面上的联系的，也就是不查表的情况下，是看不出关联的，</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">new_kernel</span>() <span class="punctuation">-&gt;</span> <span class="keyword">Self</span> &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">memory_set</span> = <span class="keyword">Self</span>::<span class="title function_ invoke__">new_bare</span>();</span><br><span class="line">    <span class="comment">// map trampoline</span></span><br><span class="line">    memory_set.<span class="title function_ invoke__">map_trampoline</span>();</span><br><span class="line">    <span class="comment">// map kernel sections</span></span><br><span class="line">    info!(<span class="string">&quot;.text [&#123;:#x&#125;, &#123;:#x&#125;)&quot;</span>, stext <span class="keyword">as</span> <span class="type">usize</span>, etext <span class="keyword">as</span> <span class="type">usize</span>);</span><br><span class="line">    info!(<span class="string">&quot;.rodata [&#123;:#x&#125;, &#123;:#x&#125;)&quot;</span>, srodata <span class="keyword">as</span> <span class="type">usize</span>, erodata <span class="keyword">as</span> <span class="type">usize</span>);</span><br><span class="line">    info!(<span class="string">&quot;.data [&#123;:#x&#125;, &#123;:#x&#125;)&quot;</span>, sdata <span class="keyword">as</span> <span class="type">usize</span>, edata <span class="keyword">as</span> <span class="type">usize</span>);</span><br><span class="line">    info!(</span><br><span class="line">        <span class="string">&quot;.bss [&#123;:#x&#125;, &#123;:#x&#125;)&quot;</span>,</span><br><span class="line">        sbss_with_stack <span class="keyword">as</span> <span class="type">usize</span>, ebss <span class="keyword">as</span> <span class="type">usize</span></span><br><span class="line">    );</span><br><span class="line">    info!(<span class="string">&quot;mapping .text section&quot;</span>);</span><br><span class="line">    memory_set.<span class="title function_ invoke__">push</span>(</span><br><span class="line">        MapArea::<span class="title function_ invoke__">new</span>(</span><br><span class="line">            (stext <span class="keyword">as</span> <span class="type">usize</span>).<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            (etext <span class="keyword">as</span> <span class="type">usize</span>).<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            MapType::Identical,</span><br><span class="line">            MapPermission::R | MapPermission::X,</span><br><span class="line">        ),</span><br><span class="line">        <span class="literal">None</span>,</span><br><span class="line">    );</span><br><span class="line">    info!(<span class="string">&quot;mapping .rodata section&quot;</span>);</span><br><span class="line">    memory_set.<span class="title function_ invoke__">push</span>(</span><br><span class="line">        MapArea::<span class="title function_ invoke__">new</span>(</span><br><span class="line">            (srodata <span class="keyword">as</span> <span class="type">usize</span>).<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            (erodata <span class="keyword">as</span> <span class="type">usize</span>).<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            MapType::Identical,</span><br><span class="line">            MapPermission::R,</span><br><span class="line">        ),</span><br><span class="line">        <span class="literal">None</span>,</span><br><span class="line">    );</span><br><span class="line">    info!(<span class="string">&quot;mapping .data section&quot;</span>);</span><br><span class="line">    memory_set.<span class="title function_ invoke__">push</span>(</span><br><span class="line">        MapArea::<span class="title function_ invoke__">new</span>(</span><br><span class="line">            (sdata <span class="keyword">as</span> <span class="type">usize</span>).<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            (edata <span class="keyword">as</span> <span class="type">usize</span>).<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            MapType::Identical,</span><br><span class="line">            MapPermission::R | MapPermission::W,</span><br><span class="line">        ),</span><br><span class="line">        <span class="literal">None</span>,</span><br><span class="line">    );</span><br><span class="line">    info!(<span class="string">&quot;mapping .bss section&quot;</span>);</span><br><span class="line">    memory_set.<span class="title function_ invoke__">push</span>(</span><br><span class="line">        MapArea::<span class="title function_ invoke__">new</span>(</span><br><span class="line">            (sbss_with_stack <span class="keyword">as</span> <span class="type">usize</span>).<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            (ebss <span class="keyword">as</span> <span class="type">usize</span>).<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            MapType::Identical,</span><br><span class="line">            MapPermission::R | MapPermission::W,</span><br><span class="line">        ),</span><br><span class="line">        <span class="literal">None</span>,</span><br><span class="line">    );</span><br><span class="line">    info!(<span class="string">&quot;mapping physical memory&quot;</span>);</span><br><span class="line">    memory_set.<span class="title function_ invoke__">push</span>(</span><br><span class="line">        MapArea::<span class="title function_ invoke__">new</span>(</span><br><span class="line">            (ekernel <span class="keyword">as</span> <span class="type">usize</span>).<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            MEMORY_END.<span class="title function_ invoke__">into</span>(),</span><br><span class="line">            MapType::Identical,</span><br><span class="line">            MapPermission::R | MapPermission::W,</span><br><span class="line">        ),</span><br><span class="line">        <span class="literal">None</span>,</span><br><span class="line">    );</span><br><span class="line">    memory_set</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在定义 <strong>new_kernel</strong> 方法的时候，引用了大量的链接文件中定义的全局变量，比如 <strong>sbss,ebss,stext,etext</strong> 等，可以看到，这些已有的程序需要使用的地址都进行了 <strong>Identical</strong> 类型的映射。</p>
+<p>在 <strong>MapArea</strong> 的 <strong>map_one</strong> 方法中，我们可以发现， <strong>Identical</strong> 是不需要再次分配内存来进行映射的，而是直接把传进来的地址作为物理地址使用，也就是说，为了保证在切换地址模式后，内核的代码仍旧能够正常工作，它用同样的虚拟地址指向了原来的物理地址，即建立了0x80000000(虚拟地址)到0x80000000(物理地址)的联系，这部分代码如下：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">map_one</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, page_table: &amp;<span class="keyword">mut</span> PageTable, vpn: VirtPageNum) &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">ppn</span>: PhysPageNum;</span><br><span class="line">    <span class="keyword">match</span> <span class="keyword">self</span>.map_type &#123;</span><br><span class="line">        MapType::Identical =&gt; &#123;</span><br><span class="line">            ppn = <span class="title function_ invoke__">PhysPageNum</span>(vpn.<span class="number">0</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        MapType::Framed =&gt; &#123;</span><br><span class="line">            <span class="keyword">let</span> <span class="variable">frame</span> = <span class="title function_ invoke__">frame_alloc</span>().<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">            ppn = frame.ppn;</span><br><span class="line">            <span class="keyword">self</span>.data_frames.<span class="title function_ invoke__">insert</span>(vpn, frame);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">pte_flags</span> = PTEFlags::<span class="title function_ invoke__">from_bits</span>(<span class="keyword">self</span>.map_perm.bits).<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">    page_table.<span class="title function_ invoke__">map</span>(vpn, ppn, pte_flags);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+
+    </div>
+
+    
+        <div id="gitalk-container"></div>
+        <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
+        <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+        <script type="text/javascript">
+            const gitalk = new Gitalk({
+                clientID: "878e0dc683b1e7b833f9",
+                clientSecret: "c592d75254a393f7760494f50ae37263ac5f92c3",
+                repo: "blog-comments",      // The repository of store comments,
+                owner: "Blameying",
+                admin: ["Blameying"],
+                id: location.pathname,      // Ensure uniqueness and length less than 50
+                distractionFreeMode: false  // Facebook-like distraction free mode
+            })
+
+            gitalk.render('gitalk-container')
+        </script>
+    
+</div>
+    <div class="footer" id="footer">
+    <p><h4>版权所有 © 2020 | 作者: Blame | 主题 By <a class="theme-author" target="_blank" rel="noopener" href="https://github.com/Xunzhuo/hexo-theme-coder" style="font-size:14px; color: #969696">Coder</a></h4>
+    
+        <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+        <span id="busuanzi_container_site_pv">本站浏览总访问量: <span id="busuanzi_value_site_pv"></span></span>
+        <span class="post-meta-divider">|</span>
+        <span id="busuanzi_container_site_uv">本站访问人数: <span id="busuanzi_value_site_uv"></span></span>
+    
+    <label class="el-switch el-switch-blue el-switch-sm" style="vertical-align: sub;">
+        <input type="checkbox" name="switch" id="update_style">
+        <span class="el-switch-style"></span>
+    </label>
+
+    <!--         <script type="text/javascript">
+    var cnzz_protocol = (("https:" == document.location.protocol) ? "https://" : "http://");
+    document.write(unescape("%3Cspan id='cnzz_stat_icon_1278548644'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "v1.cnzz.com/stat.php%3Fid%3D1278548644%26show%3Dpic1' type='text/javascript'%3E%3C/script%3E"));
+    </script> -->
+</p>
+</div>
+
+<input type="hidden" id="web_style" value="black">
+<input type="hidden" id="valine_appid" value="">
+<input type="hidden" id="valine_appKey" value="">
+
+<script src="/libs/jquery.min.js"></script>
+
+
+<script src="/libs/highlight/highlight.pack.js"></script>
+
+<script src='//cdn.jsdelivr.net/npm/valine@1.3.10/dist/Valine.min.js'></script>
+
+<script src="/js/js.js"></script>
+
+<style type="text/css">
+.v * {
+color: #698fca;
+}
+.v .vlist .vcard .vhead .vsys {
+color: #3a3e4a;
+}
+.v .vlist .vcard .vh .vmeta .vat {
+color: #638fd5;
+}
+.v .vlist .vcard .vhead .vnick {
+color: #6ba1ff;
+}
+.v a {
+color: #8696b1;
+}
+.v .vlist .vcard .vhead .vnick:hover {
+color: #669bfc;
+}
+</style>
+    <script type="text/javascript" color="173,174,173" opacity='1' zIndex="-2" count="99" src="//cdn.bootcss.com/canvas-nest.js/1.0.0/canvas-nest.min.js"></script>
+</body>
+</html>
